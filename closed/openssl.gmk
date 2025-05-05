@@ -95,7 +95,7 @@ endif # OPENSSL_TARGET
 
 OPENSSL_CFLAGS :=
 ifeq ($(OPENJDK_TARGET_CPU), s390x)
-  OPENSSL_CFLAGS := -march=z196
+  OPENSSL_CFLAGS := -march=z10
 endif
 
 ifneq (,$(CCACHE))
