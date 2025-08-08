@@ -199,6 +199,7 @@ public final class RestrictedSecurity {
 
     @SuppressWarnings("removal")
     private static void checkHashValues(boolean fromProviders) {
+        /*
         ProfileParser parser = profileParser;
         if (parser != null) {
             if (fromProviders) {
@@ -217,6 +218,7 @@ public final class RestrictedSecurity {
                 }
             }
         }
+        */
     }
 
     /**
