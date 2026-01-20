@@ -24,15 +24,25 @@
  */
 package sun.security.ssl;
 
+import sun.security.util.RawKeySpec;
+
+import javax.crypto.KEM;
 import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLHandshakeException;
+import javax.security.auth.DestroyFailedException;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
 import java.security.PrivateKey;
+import java.security.Provider;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
+
+import sun.security.util.KeyUtil;
 
 /**
  * A common class for creating various KeyDerivation types.
@@ -43,15 +53,32 @@ public class KAKeyDerivation implements SSLKeyDerivation {
     private final HandshakeContext context;
     private final PrivateKey localPrivateKey;
     private final PublicKey peerPublicKey;
+    private final byte[] keyshare;
+    private final Provider provider;
 
+    // Constructor called by Key Agreement
     KAKeyDerivation(String algorithmName,
             HandshakeContext context,
             PrivateKey localPrivateKey,
             PublicKey peerPublicKey) {
+        this(algorithmName, null, context, localPrivateKey,
+                peerPublicKey, null);
+    }
+
+    // When the constructor called by KEM: store the client's public key or the
+    // encapsulated message in keyshare.
+    KAKeyDerivation(String algorithmName,
+                    NamedGroup namedGroup,
+                    HandshakeContext context,
+                    PrivateKey localPrivateKey,
+                    PublicKey peerPublicKey,
+                    byte[] keyshare) {
         this.algorithmName = algorithmName;
         this.context = context;
         this.localPrivateKey = localPrivateKey;
         this.peerPublicKey = peerPublicKey;
+        this.keyshare = keyshare;
+        this.provider = (namedGroup != null) ? namedGroup.getProvider() : null;
     }
 
     @Override
@@ -92,39 +119,146 @@ public class KAKeyDerivation implements SSLKeyDerivation {
         }
     }
 
-    /**
-     * Handle the TLSv1.3 objects, which use the HKDF algorithms.
-     */
-    private SecretKey t13DeriveKey(String algorithm,
-            AlgorithmParameterSpec params) throws IOException {
-        try {
-            KeyAgreement ka = KeyAgreement.getInstance(algorithmName);
-            ka.init(localPrivateKey);
-            ka.doPhase(peerPublicKey, true);
-            SecretKey sharedSecret
-                    = ka.generateSecret("TlsPremasterSecret");
+    private SecretKey deriveHandshakeSecret(String label,
+            SecretKey sharedSecret)
+            throws GeneralSecurityException, IOException {
+        SecretKey earlySecret = null;
+        SecretKey saltSecret = null;
+        SecretKey ikm = null;
 
-            CipherSuite.HashAlg hashAlg = context.negotiatedCipherSuite.hashAlg;
-            SSLKeyDerivation kd = context.handshakeKeyDerivation;
-            HKDF hkdf = new HKDF(hashAlg.name);
+        CipherSuite.HashAlg hashAlg = context.negotiatedCipherSuite.hashAlg;
+        SSLKeyDerivation kd = context.handshakeKeyDerivation;
+        try {
             if (kd == null) {   // No PSK is in use.
                 // If PSK is not in use Early Secret will still be
                 // HKDF-Extract(0, 0).
                 byte[] zeros = new byte[hashAlg.hashLength];
-                SecretKeySpec ikm
-                        = new SecretKeySpec(zeros, "TlsPreSharedSecret");
-                SecretKey earlySecret
-                        = hkdf.extract(zeros, ikm, "TlsEarlySecret");
+                HKDF initialHkdf = new HKDF(hashAlg.name);
+                SecretKey pskIkm = new SecretKeySpec(zeros, hashAlg.name);
+                earlySecret = initialHkdf.extract(zeros, pskIkm, "TlsEarlySecret");
                 kd = new SSLSecretDerivation(context, earlySecret);
             }
 
             // derive salt secret
-            SecretKey saltSecret = kd.deriveKey("TlsSaltSecret", null);
+            saltSecret = kd.deriveKey("TlsSaltSecret", null);
 
             // derive handshake secret
-            return hkdf.extract(saltSecret, sharedSecret, algorithm);
+            // NOTE: do not reuse the HKDF object for "TlsEarlySecret" for
+            // the handshake secret key derivation (below) as it may not
+            // work with the "sharedSecret" obj.
+            HKDF hkdf = new HKDF(hashAlg.name);
+            if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
+                byte[] k1 = hsk.k1().getEncoded();
+                byte[] k2 = hsk.k2().getEncoded();
+                byte[] combined = new byte[k1.length + k2.length];
+                System.arraycopy(k1, 0, combined, 0, k1.length);
+                System.arraycopy(k2, 0, combined, k1.length, k2.length);
+                
+                ikm = new SecretKeySpec(combined, "Generic");
+                java.util.Arrays.fill(combined, (byte)0);
+            } else {
+                ikm = sharedSecret;
+            }
+
+            return hkdf.extract(saltSecret, ikm, label);
+        } finally {
+            destroySecretKey(earlySecret);
+            destroySecretKey(saltSecret);
+            if (ikm != null && ikm != sharedSecret) destroySecretKey(ikm);
+        }
+    }
+    /**
+     * This method is called by the server to perform KEM encapsulation.
+     * It uses the client's public key (sent by the client as a keyshare)
+     * to encapsulate a shared secret and returns the encapsulated message.
+     *
+     * Package-private, used from KeyShareExtension.SHKeyShareProducer::
+     * produce().
+     */
+    KEM.Encapsulated encapsulate(String algorithm, SecureRandom random)
+            throws IOException {
+        SecretKey sharedSecret = null;
+
+        if (keyshare == null) {
+            throw new IOException("No keyshare available for KEM " +
+                    "encapsulation");
+        }
+
+        try {
+            KeyFactory kf = (provider != null) ?
+                    KeyFactory.getInstance(algorithmName, provider) :
+                    KeyFactory.getInstance(algorithmName);
+            var pk = kf.generatePublic(new RawKeySpec(keyshare));
+
+            KEM kem = (provider != null) ?
+                    KEM.getInstance(algorithmName, provider) :
+                    KEM.getInstance(algorithmName);
+            KEM.Encapsulator e = kem.newEncapsulator(pk, random);
+            KEM.Encapsulated enc = e.encapsulate();
+            sharedSecret = enc.key();
+
+            SecretKey derived = deriveHandshakeSecret(algorithm, sharedSecret);
+
+            return new KEM.Encapsulated(derived, enc.encapsulation(), null);
         } catch (GeneralSecurityException gse) {
             throw new SSLHandshakeException("Could not generate secret", gse);
+        } finally {
+            KeyUtil.destroySecretKeys(sharedSecret);
+        }
+    }
+
+    /**
+     * Handle the TLSv1.3 objects, which use the HKDF algorithms.
+     */
+    private SecretKey t13DeriveKey(String type)
+            throws IOException {
+        SecretKey sharedSecret = null;
+
+        try {
+            if (keyshare != null) {
+                // Using KEM: called by the client after receiving the KEM
+                // ciphertext (keyshare) from the server in ServerHello.
+                // The client decapsulates it using its private key.
+                KEM kem = (provider != null)
+                        ? KEM.getInstance(algorithmName, provider)
+                        : KEM.getInstance(algorithmName);
+                var decapsulator = kem.newDecapsulator(localPrivateKey);
+                sharedSecret = decapsulator.decapsulate(
+                        keyshare, 0, decapsulator.secretSize(),
+                        "TlsPremasterSecret");
+            } else {
+                // Using traditional DH-style Key Agreement
+                KeyAgreement ka = KeyAgreement.getInstance(algorithmName);
+                ka.init(localPrivateKey);
+                ka.doPhase(peerPublicKey, true);
+                sharedSecret = ka.generateSecret("TlsPremasterSecret");
+            }
+
+            return deriveHandshakeSecret(type, sharedSecret);
+        } catch (GeneralSecurityException gse) {
+            throw new SSLHandshakeException("Could not generate secret", gse);
+        } finally {
+            KeyUtil.destroySecretKeys(sharedSecret);
+        }
+    }
+
+    // destroy secret keys in a best-effort way
+    public static void destroySecretKeys(SecretKey... keys) {
+        for (SecretKey k : keys) {
+            if (k != null) {
+                if (k instanceof SecretKeySpec sk) {
+                    SharedSecrets.getJavaxCryptoSpecAccess()
+                            .clearSecretKeySpec(sk);
+                } else if (k instanceof PBKDF2KeyImpl p2k) {
+                    p2k.clear();
+                } else {
+                    try {
+                        k.destroy();
+                    } catch (DestroyFailedException e) {
+                        // swallow
+                    }
+                }
+            }
         }
     }
 }
