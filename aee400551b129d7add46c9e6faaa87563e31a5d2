@@ -1,0 +1,1 @@
+{"id":"4b23419a-8a7b-46ff-80fb-bcc7af45171b","ts":"2026-02-11T18:03:53.636Z","version":"1.0.2","toolName":"apply_diff","taskID":"e452f24a-c89e-475d-9feb-7abbbd273ea6","path":"closed/src/java.base/share/native/libjncrypto/NativeCrypto.c","numLinesApplied":2,"currentRange":{"startLine":615,"endLine":616}}
