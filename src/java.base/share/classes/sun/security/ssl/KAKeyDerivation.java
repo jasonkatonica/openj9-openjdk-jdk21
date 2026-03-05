@@ -41,8 +41,7 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
-
-import sun.security.util.KeyUtil;
+import jdk.internal.access.SharedSecrets;
 
 /**
  * A common class for creating various KeyDerivation types.
@@ -203,14 +202,14 @@ public class KAKeyDerivation implements SSLKeyDerivation {
         } catch (GeneralSecurityException gse) {
             throw new SSLHandshakeException("Could not generate secret", gse);
         } finally {
-            KeyUtil.destroySecretKeys(sharedSecret);
+            destroySecretKey(sharedSecret);
         }
     }
 
     /**
      * Handle the TLSv1.3 objects, which use the HKDF algorithms.
      */
-    private SecretKey t13DeriveKey(String type)
+    private SecretKey t13DeriveKey(String type, AlgorithmParameterSpec params)
             throws IOException {
         SecretKey sharedSecret = null;
 
@@ -238,19 +237,24 @@ public class KAKeyDerivation implements SSLKeyDerivation {
         } catch (GeneralSecurityException gse) {
             throw new SSLHandshakeException("Could not generate secret", gse);
         } finally {
-            KeyUtil.destroySecretKeys(sharedSecret);
+            destroySecretKey(sharedSecret);
         }
     }
 
     // destroy secret keys in a best-effort way
-    public static void destroySecretKeys(SecretKey... keys) {
+    private static void destroySecretKey(SecretKey... keys) {
         for (SecretKey k : keys) {
             if (k != null) {
                 if (k instanceof SecretKeySpec sk) {
                     SharedSecrets.getJavaxCryptoSpecAccess()
                             .clearSecretKeySpec(sk);
-                } else if (k instanceof PBKDF2KeyImpl p2k) {
-                    p2k.clear();
+                } else if (k.getClass().getName().equals("com.sun.crypto.provider.PBKDF2KeyImpl")) {
+                    try {
+                        java.lang.reflect.Method m = k.getClass().getDeclaredMethod("clear");
+                        m.invoke(k);
+                    } catch (Exception e) {
+                        // swallow
+                    }
                 } else {
                     try {
                         k.destroy();
