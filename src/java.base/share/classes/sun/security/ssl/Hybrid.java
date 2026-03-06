@@ -426,21 +426,6 @@ public class Hybrid {
         }
 
         static byte[] onlyKey(PublicKey key) {
-            byte[] encoded = key.getEncoded();
-            if (encoded != null && "X.509".equalsIgnoreCase(key.getFormat())) {
-                try {
-                    X509Key xk = new X509Key();
-                    xk.decode(encoded);
-                    return xk.getKeyAsBytes();
-                } catch (InvalidKeyException e) {
-                    throw new ProviderException("Failed to decode X.509 key", e);
-                }
-            } else {
-                // Fallback for 3rd-party providers
-                throw new ProviderException("Invalid public key encoding " +
-                        "format");
-            }
-
             if (key instanceof X509Key xk) {
                 return xk.getKeyAsBytes();
             }
