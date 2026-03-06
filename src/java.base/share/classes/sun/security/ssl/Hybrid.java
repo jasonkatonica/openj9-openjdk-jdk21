@@ -426,15 +426,25 @@ public class Hybrid {
         }
 
         static byte[] onlyKey(PublicKey key) {
-            if (key instanceof X509Key xk) {
-                return xk.getKeyAsBytes();
-            }
-
-            // Fallback for 3rd-party providers
-            if (!"X.509".equalsIgnoreCase(key.getFormat())) {
+            byte[] encoded = key.getEncoded();
+            if (encoded != null && "X.509".equalsIgnoreCase(key.getFormat())) {
+                try {
+                    X509Key xk = new X509Key();
+                    xk.decode(encoded);
+                    return xk.getKeyAsBytes();
+                } catch (InvalidKeyException e) {
+                    throw new ProviderException("Failed to decode X.509 key", e);
+                }
+            } else {
+                // Fallback for 3rd-party providers
                 throw new ProviderException("Invalid public key encoding " +
                         "format");
             }
+
+            if (key instanceof X509Key xk) {
+                return xk.getKeyAsBytes();
+            }
+            
             var xk = new X509Key();
             try {
                 xk.decode(key.getEncoded());
