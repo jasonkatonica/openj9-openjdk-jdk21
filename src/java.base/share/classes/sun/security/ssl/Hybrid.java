@@ -384,7 +384,7 @@ public class Hybrid {
             implements SecretKey {
         @Override
         public String getAlgorithm() {
-            return "Generic";
+            return "TlsPremasterSecret";
         }
 
         @Override
