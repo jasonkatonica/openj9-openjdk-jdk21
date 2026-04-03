@@ -92,16 +92,23 @@ public class DHasKEM implements KEMSpi {
         @Override
         public KEM.Encapsulated engineEncapsulate(int from, int to,
                 String algorithm) {
+            System.out.println("DEBUG [engineEncapsulate] Input - from: " + from + ", to: " + to + ", algorithm: " + algorithm);
             KeyPair kpE = params.generateKeyPair(sr);
             PrivateKey skE = kpE.getPrivate();
             PublicKey pkE = kpE.getPublic();
+            System.out.println("DEBUG [engineEncapsulate] Generated key pair - skE algorithm: " + skE.getAlgorithm() + ", pkE algorithm: " + pkE.getAlgorithm());
             byte[] pkEm = params.SerializePublicKey(pkE);
+            System.out.println("DEBUG [engineEncapsulate] Serialized public key length: " + pkEm.length);
             try {
                 SecretKey dh = params.DH(algorithm, skE, pkR);
+                System.out.println("DEBUG [engineEncapsulate] DH result - algorithm: " + dh.getAlgorithm() + ", encoded length: " + (dh.getEncoded() != null ? dh.getEncoded().length : "null"));
+                SecretKey result = sub(dh, from, to);
+                System.out.println("DEBUG [engineEncapsulate] Final result - algorithm: " + result.getAlgorithm() + ", encoded length: " + (result.getEncoded() != null ? result.getEncoded().length : "null"));
                 return new KEM.Encapsulated(
-                        sub(dh, from, to),
+                        result,
                         pkEm, null);
             } catch (Exception e) {
+                System.out.println("DEBUG [engineEncapsulate] Exception occurred: " + e.getMessage());
                 throw new ProviderException("internal error", e);
             }
         }
@@ -119,16 +126,24 @@ public class DHasKEM implements KEMSpi {
         @Override
         public SecretKey engineDecapsulate(byte[] encapsulation, int from,
                 int to, String algorithm) throws DecapsulateException {
+            System.out.println("DEBUG [engineDecapsulate] Input - encapsulation length: " + encapsulation.length + ", from: " + from + ", to: " + to + ", algorithm: " + algorithm);
             if (encapsulation.length != params.publicKeyLen) {
+                System.out.println("DEBUG [engineDecapsulate] Encapsulation size mismatch - expected: " + params.publicKeyLen + ", got: " + encapsulation.length);
                 throw new DecapsulateException("incorrect encapsulation size");
             }
             try {
                 PublicKey pkE = params.DeserializePublicKey(encapsulation);
+                System.out.println("DEBUG [engineDecapsulate] Deserialized public key - algorithm: " + pkE.getAlgorithm());
                 SecretKey dh = params.DH(algorithm, skR, pkE);
-                return sub(dh, from, to);
+                System.out.println("DEBUG [engineDecapsulate] DH result - algorithm: " + dh.getAlgorithm() + ", encoded length: " + (dh.getEncoded() != null ? dh.getEncoded().length : "null"));
+                SecretKey result = sub(dh, from, to);
+                System.out.println("DEBUG [engineDecapsulate] Final result - algorithm: " + result.getAlgorithm() + ", encoded length: " + (result.getEncoded() != null ? result.getEncoded().length : "null"));
+                return result;
             } catch (IOException | InvalidKeyException e) {
+                System.out.println("DEBUG [engineDecapsulate] Exception occurred: " + e.getMessage());
                 throw new DecapsulateException("Cannot decapsulate", e);
             } catch (Exception e) {
+                System.out.println("DEBUG [engineDecapsulate] Unexpected exception: " + e.getMessage());
                 throw new ProviderException("internal error", e);
             }
         }
@@ -245,10 +260,28 @@ public class DHasKEM implements KEMSpi {
 
         private SecretKey DH(String alg, PrivateKey skE, PublicKey pkR)
                 throws NoSuchAlgorithmException, InvalidKeyException {
+            System.out.println("DEBUG [DH] Input - requested algorithm: " + alg + ", kaAlgorithm: " + kaAlgorithm);
+            System.out.println("DEBUG [DH] Input - skE algorithm: " + skE.getAlgorithm() + ", pkR algorithm: " + pkR.getAlgorithm());
             KeyAgreement ka = KeyAgreement.getInstance(kaAlgorithm);
+            System.out.println("DEBUG [DH] KeyAgreement instance created - algorithm: " + ka.getAlgorithm() + ", provider: " + ka.getProvider().getName());
             ka.init(skE);
+            System.out.println("DEBUG [DH] KeyAgreement initialized with private key");
             ka.doPhase(pkR, true);
-            return ka.generateSecret(alg);
+            System.out.println("DEBUG [DH] doPhase completed with public key");
+            // Use "TlsPremasterSecret" for key agreement
+            SecretKey secret = ka.generateSecret("TlsPremasterSecret");
+            System.out.println("DEBUG [DH] Generated secret with TlsPremasterSecret - algorithm: " + secret.getAlgorithm() + ", encoded length: " + (secret.getEncoded() != null ? secret.getEncoded().length : "null"));
+            // If the requested algorithm is different rewrap
+            if (!alg.equals("TlsPremasterSecret")) {
+                System.out.println("DEBUG [DH] Rewrapping secret from TlsPremasterSecret to " + alg);
+                byte[] encoded = secret.getEncoded();
+                System.out.println("DEBUG [DH] Secret encoded bytes length: " + (encoded != null ? encoded.length : "null"));
+                SecretKey rewrapped = new javax.crypto.spec.SecretKeySpec(encoded, alg);
+                System.out.println("DEBUG [DH] Rewrapped secret - algorithm: " + rewrapped.getAlgorithm() + ", encoded length: " + (rewrapped.getEncoded() != null ? rewrapped.getEncoded().length : "null"));
+                return rewrapped;
+            }
+            System.out.println("DEBUG [DH] Returning secret without rewrapping (algorithm matches TlsPremasterSecret)");
+            return secret;
         }
     }
 }
