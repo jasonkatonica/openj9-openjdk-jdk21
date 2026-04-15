@@ -389,12 +389,20 @@ public class Hybrid {
 
         @Override
         public String getFormat() {
-            return null;
+            return "RAW";
         }
 
         @Override
         public byte[] getEncoded() {
-            return null;
+            byte[] k1Bytes = k1.getEncoded();
+            byte[] k2Bytes = k2.getEncoded();
+            if (k1Bytes == null || k2Bytes == null) {
+                return null;
+            }
+            byte[] combined = new byte[k1Bytes.length + k2Bytes.length];
+            System.arraycopy(k1Bytes, 0, combined, 0, k1Bytes.length);
+            System.arraycopy(k2Bytes, 0, combined, k1Bytes.length, k2Bytes.length);
+            return combined;
         }
     }
 
