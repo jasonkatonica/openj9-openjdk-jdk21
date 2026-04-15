@@ -146,16 +146,19 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // work with the "sharedSecret" obj.
             HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
-
-                byte[] k1 = hsk.k1().getEncoded();
-                byte[] k2 = hsk.k2().getEncoded();
-                byte[] combined = new byte[k1.length + k2.length];
-                System.arraycopy(k1, 0, combined, 0, k1.length);
-                System.arraycopy(k2, 0, combined, k1.length, k2.length);
-
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Processing Hybrid.SecretKeyImpl");
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (hsk.k1().getEncoded() != null ? hsk.k1().getEncoded().length : "null"));
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (hsk.k2().getEncoded() != null ? hsk.k2().getEncoded().length : "null"));
+                byte[] combined = hsk.getEncoded();
+                if (combined == null) {
+                    throw new SSLHandshakeException(
+                            "Hybrid secret key has no encoded form");
+                }
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Using non-hybrid shared secret - algorithm: " + sharedSecret.getAlgorithm());
                 ikm = sharedSecret;
             }
 
