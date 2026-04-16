@@ -110,7 +110,8 @@ public class Hybrid {
         if (name.startsWith("secp") || name.equals("X25519")) {
             return KEM.getInstance("DH", HybridProvider.PROVIDER);
         } else {
-            return KEM.getInstance("ML-KEM");
+            // Pass the specific ML-KEM variant (e.g., "ML-KEM-768" or "ML-KEM-1024")
+            return KEM.getInstance(name);
         }
     }
 
