@@ -35,6 +35,7 @@ import javax.security.auth.DestroyFailedException;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.HexFormat;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.Provider;
@@ -150,16 +151,16 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 byte[] k1Bytes = hsk.k1().getEncoded();
                 byte[] k2Bytes = hsk.k2().getEncoded();
                 System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (k1Bytes != null ? k1Bytes.length : "null"));
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? javax.xml.bind.DatatypeConverter.printHexBinary(k1Bytes) : "null"));
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? HexFormat.of().formatHex(k1Bytes) : "null"));
                 System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (k2Bytes != null ? k2Bytes.length : "null"));
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? javax.xml.bind.DatatypeConverter.printHexBinary(k2Bytes) : "null"));
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? HexFormat.of().formatHex(k2Bytes) : "null"));
                 byte[] combined = hsk.getEncoded();
                 if (combined == null) {
                     throw new SSLHandshakeException(
                             "Hybrid secret key has no encoded form");
                 }
                 System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + javax.xml.bind.DatatypeConverter.printHexBinary(combined));
+                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + HexFormat.of().formatHex(combined));
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
