@@ -333,6 +333,7 @@ public class Hybrid {
             System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling right encapsulator with algorithm: " + algorithm);
             var right = re.encapsulate(0, re.secretSize(), algorithm);
             System.out.println("DEBUG [Hybrid.engineEncapsulate] Right key algorithm: " + right.key().getAlgorithm() + ", encoded length: " + (right.key().getEncoded() != null ? right.key().getEncoded().length : "null"));
+            System.out.println("DEBUG [Hybrid.engineEncapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + javax.xml.bind.DatatypeConverter.printHexBinary(Arrays.copyOf(right.encapsulation(), Math.min(32, right.encapsulation().length))));
             
             return new KEM.Encapsulated(
                     new SecretKeyImpl(left.key(), right.key()),
@@ -384,6 +385,7 @@ public class Hybrid {
             var right = Arrays.copyOfRange(encapsulation,
                     ld.encapsulationSize(), encapsulation.length);
             System.out.println("DEBUG [Hybrid.engineDecapsulate] Split encapsulation - left size: " + left.length + ", right size: " + right.length);
+            System.out.println("DEBUG [Hybrid.engineDecapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + javax.xml.bind.DatatypeConverter.printHexBinary(Arrays.copyOf(right, Math.min(32, right.length))));
             
             System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling left decapsulator with algorithm: " + algorithm);
             SecretKey leftKey = ld.decapsulate(left, 0, ld.secretSize(), algorithm);
