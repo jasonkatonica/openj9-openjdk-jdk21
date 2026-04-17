@@ -318,9 +318,9 @@ public class Hybrid {
         @Override
         public KEM.Encapsulated engineEncapsulate(int from, int to,
                 String algorithm) {
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Input - from: " + from + ", to: " + to + ", algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Input - from: " + from + ", to: " + to + ", algorithm: " + algorithm);
             int expectedSecretSize = engineSecretSize();
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Expected secret size: " + expectedSecretSize);
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Expected secret size: " + expectedSecretSize);
             if (!(from == 0 && to == expectedSecretSize)) {
                 throw new IllegalArgumentException(
                         "Invalid range for encapsulation: from = " + from +
@@ -328,14 +328,14 @@ public class Hybrid {
                         expectedSecretSize);
             }
 
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling left encapsulator with algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling left encapsulator with algorithm: " + algorithm);
             var left  = le.encapsulate(0, le.secretSize(), algorithm);
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Left key algorithm: " + left.key().getAlgorithm() + ", encoded length: " + (left.key().getEncoded() != null ? left.key().getEncoded().length : "null"));
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Left key algorithm: " + left.key().getAlgorithm() + ", encoded length: " + (left.key().getEncoded() != null ? left.key().getEncoded().length : "null"));
             
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling right encapsulator with algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling right encapsulator with algorithm: " + algorithm);
             var right = re.encapsulate(0, re.secretSize(), algorithm);
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Right key algorithm: " + right.key().getAlgorithm() + ", encoded length: " + (right.key().getEncoded() != null ? right.key().getEncoded().length : "null"));
-            System.out.println("DEBUG [Hybrid.engineEncapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right.encapsulation(), Math.min(32, right.encapsulation().length))));
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right key algorithm: " + right.key().getAlgorithm() + ", encoded length: " + (right.key().getEncoded() != null ? right.key().getEncoded().length : "null"));
+            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right.encapsulation(), Math.min(32, right.encapsulation().length))));
             
             return new KEM.Encapsulated(
                     new SecretKeyImpl(left.key(), right.key()),
@@ -364,9 +364,9 @@ public class Hybrid {
         @Override
         public SecretKey engineDecapsulate(byte[] encapsulation, int from,
                 int to, String algorithm) throws DecapsulateException {
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Input - encapsulation length: " + encapsulation.length + ", from: " + from + ", to: " + to + ", algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Input - encapsulation length: " + encapsulation.length + ", from: " + from + ", to: " + to + ", algorithm: " + algorithm);
             int expectedEncSize = engineEncapsulationSize();
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected encapsulation size: " + expectedEncSize);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected encapsulation size: " + expectedEncSize);
             if (encapsulation.length != expectedEncSize) {
                 throw new IllegalArgumentException(
                         "Invalid key encapsulation message length: " +
@@ -375,7 +375,7 @@ public class Hybrid {
             }
 
             int expectedSecretSize = engineSecretSize();
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected secret size: " + expectedSecretSize);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected secret size: " + expectedSecretSize);
             if (!(from == 0 && to == expectedSecretSize)) {
                 throw new IllegalArgumentException(
                         "Invalid range for decapsulation: from = " + from +
@@ -386,16 +386,16 @@ public class Hybrid {
             var left = Arrays.copyOf(encapsulation, ld.encapsulationSize());
             var right = Arrays.copyOfRange(encapsulation,
                     ld.encapsulationSize(), encapsulation.length);
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Split encapsulation - left size: " + left.length + ", right size: " + right.length);
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right, Math.min(32, right.length))));
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Split encapsulation - left size: " + left.length + ", right size: " + right.length);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right, Math.min(32, right.length))));
             
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling left decapsulator with algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling left decapsulator with algorithm: " + algorithm);
             SecretKey leftKey = ld.decapsulate(left, 0, ld.secretSize(), algorithm);
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Left key algorithm: " + leftKey.getAlgorithm() + ", encoded length: " + (leftKey.getEncoded() != null ? leftKey.getEncoded().length : "null"));
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Left key algorithm: " + leftKey.getAlgorithm() + ", encoded length: " + (leftKey.getEncoded() != null ? leftKey.getEncoded().length : "null"));
             
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling right decapsulator with algorithm: " + algorithm);
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling right decapsulator with algorithm: " + algorithm);
             SecretKey rightKey = rd.decapsulate(right, 0, rd.secretSize(), algorithm);
-            System.out.println("DEBUG [Hybrid.engineDecapsulate] Right key algorithm: " + rightKey.getAlgorithm() + ", encoded length: " + (rightKey.getEncoded() != null ? rightKey.getEncoded().length : "null"));
+            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right key algorithm: " + rightKey.getAlgorithm() + ", encoded length: " + (rightKey.getEncoded() != null ? rightKey.getEncoded().length : "null"));
             
             return new SecretKeyImpl(leftKey, rightKey);
         }

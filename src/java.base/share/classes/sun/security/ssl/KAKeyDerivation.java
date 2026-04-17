@@ -147,24 +147,24 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // work with the "sharedSecret" obj.
             HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Processing Hybrid.SecretKeyImpl");
-                byte[] k1Bytes = hsk.k1().getEncoded();
-                byte[] k2Bytes = hsk.k2().getEncoded();
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (k1Bytes != null ? k1Bytes.length : "null"));
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? HexFormat.of().formatHex(k1Bytes) : "null"));
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (k2Bytes != null ? k2Bytes.length : "null"));
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? HexFormat.of().formatHex(k2Bytes) : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Processing Hybrid.SecretKeyImpl");
+                //byte[] k1Bytes = hsk.k1().getEncoded();
+                //byte[] k2Bytes = hsk.k2().getEncoded();
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (k1Bytes != null ? k1Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? HexFormat.of().formatHex(k1Bytes) : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (k2Bytes != null ? k2Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? HexFormat.of().formatHex(k2Bytes) : "null"));
                 byte[] combined = hsk.getEncoded();
                 if (combined == null) {
                     throw new SSLHandshakeException(
                             "Hybrid secret key has no encoded form");
                 }
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + HexFormat.of().formatHex(combined));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + HexFormat.of().formatHex(combined));
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
-                System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Using non-hybrid shared secret - algorithm: " + sharedSecret.getAlgorithm());
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Using non-hybrid shared secret - algorithm: " + sharedSecret.getAlgorithm());
                 ikm = sharedSecret;
             }
 
@@ -185,7 +185,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
      */
     KEM.Encapsulated encapsulate(String algorithm, SecureRandom random)
             throws IOException {
-        System.out.println("DEBUG [KAKeyDerivation.encapsulate] Called with algorithm: " + algorithm);
+        //System.out.println("DEBUG [KAKeyDerivation.encapsulate] Called with algorithm: " + algorithm);
         SecretKey sharedSecret = null;
 
         if (keyshare == null) {
