@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.*;
 import java.util.Arrays;
-//import java.util.HexFormat;
+import java.util.HexFormat;
 import java.util.Locale;
 
 // The Hybrid class wraps two underlying algorithms (left and right sides)
@@ -329,12 +329,11 @@ public class Hybrid {
             }
 
             //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling left encapsulator with algorithm: " + algorithm);
-            var left  = le.encapsulate();
+            var left  = le.encapsulate(0, le.secretSize(), algorithm);
             //System.out.println("DEBUG [Hybrid.engineEncapsulate] Left key algorithm: " + left.key().getAlgorithm() + ", encoded length: " + (left.key().getEncoded() != null ? left.key().getEncoded().length : "null"));
             
             //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling right encapsulator with algorithm: " + algorithm);
-            var right = re.encapsulate();
-
+            var right = re.encapsulate(0, re.secretSize(), algorithm);
             //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right key algorithm: " + right.key().getAlgorithm() + ", encoded length: " + (right.key().getEncoded() != null ? right.key().getEncoded().length : "null"));
             //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right.encapsulation(), Math.min(32, right.encapsulation().length))));
             
@@ -369,7 +368,7 @@ public class Hybrid {
             int expectedEncSize = engineEncapsulationSize();
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected encapsulation size: " + expectedEncSize);
             if (encapsulation.length != expectedEncSize) {
-                throw new DecapsulateException(
+                throw new IllegalArgumentException(
                         "Invalid key encapsulation message length: " +
                         encapsulation.length +
                         ", expected = " + expectedEncSize);
@@ -391,17 +390,14 @@ public class Hybrid {
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right, Math.min(32, right.length))));
             
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling left decapsulator with algorithm: " + algorithm);
-            //SecretKey leftKey = ld.decapsulate(left, 0, ld.secretSize(), algorithm);
+            SecretKey leftKey = ld.decapsulate(left, 0, ld.secretSize(), algorithm);
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Left key algorithm: " + leftKey.getAlgorithm() + ", encoded length: " + (leftKey.getEncoded() != null ? leftKey.getEncoded().length : "null"));
             
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling right decapsulator with algorithm: " + algorithm);
-            //SecretKey rightKey = rd.decapsulate(right, 0, rd.secretSize(), algorithm);
+            SecretKey rightKey = rd.decapsulate(right, 0, rd.secretSize(), algorithm);
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right key algorithm: " + rightKey.getAlgorithm() + ", encoded length: " + (rightKey.getEncoded() != null ? rightKey.getEncoded().length : "null"));
-            //return new SecretKeyImpl(leftKey, rightKey);
-            return new SecretKeyImpl(
-                    ld.decapsulate(left),
-                    rd.decapsulate(right)
-            );
+            
+            return new SecretKeyImpl(leftKey, rightKey);
         }
     }
 
@@ -415,12 +411,20 @@ public class Hybrid {
 
         @Override
         public String getFormat() {
-            return null;
+            return "RAW";
         }
 
         @Override
         public byte[] getEncoded() {
-            return null;
+            byte[] k1Bytes = k1.getEncoded();
+            byte[] k2Bytes = k2.getEncoded();
+            if (k1Bytes == null || k2Bytes == null) {
+                return null;
+            }
+            byte[] combined = new byte[k1Bytes.length + k2Bytes.length];
+            System.arraycopy(k1Bytes, 0, combined, 0, k1Bytes.length);
+            System.arraycopy(k2Bytes, 0, combined, k1Bytes.length, k2Bytes.length);
+            return combined;
         }
     }
 
@@ -455,12 +459,7 @@ public class Hybrid {
             if (key instanceof X509Key xk) {
                 return xk.getKeyAsBytes();
             }
-
-            // Fallback for 3rd-party providers
-            if (!"X.509".equalsIgnoreCase(key.getFormat())) {
-                throw new ProviderException("Invalid public key encoding " +
-                        "format");
-            }
+            
             var xk = new X509Key();
             try {
                 xk.decode(key.getEncoded());
