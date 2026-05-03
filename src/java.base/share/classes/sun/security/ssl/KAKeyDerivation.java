@@ -22,12 +22,6 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
-/*
- * ===========================================================================
- * (c) Copyright IBM Corp. 2025, 2025 All Rights Reserved
- * ===========================================================================
- */
 package sun.security.ssl;
 
 import sun.security.util.RawKeySpec;
@@ -48,13 +42,6 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
-/*[IF OPENJCEPLUS_SUPPORT]*/
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.NoSuchAlgorithmException;
-import javax.crypto.KeyGenerator;
-/*[ENDIF] OPENJCEPLUS_SUPPORT */
 import jdk.internal.access.SharedSecrets;
 
 /**
@@ -68,33 +55,6 @@ public class KAKeyDerivation implements SSLKeyDerivation {
     private final PublicKey peerPublicKey;
     private final byte[] keyshare;
     private final Provider provider;
-
-    /*[IF OPENJCEPLUS_SUPPORT]*/
-    // OpenJCEPlus HKDF support for post-quantum TLS 1.3 key derivation
-    private static final Constructor<?> hkdfExtractCtor;
-    private static final boolean openJCEPlusAvailable;
-
-    static {
-        Constructor<?> extractCtor = null;
-        boolean available = false;
-        
-        try {
-            // Load OpenJCEPlus HKDF parameter spec class (available in both
-            // OpenJCEPlus and OpenJCEPlusFIPS providers)
-            Class<?> hkdfExtractSpec = Class.forName(
-                    "ibm.security.internal.spec.HKDFExtractParameterSpec",
-                    true, ClassLoader.getSystemClassLoader());
-            extractCtor = hkdfExtractSpec.getDeclaredConstructor(
-                    SecretKey.class, byte[].class, String.class);
-            available = true;
-        } catch (ClassNotFoundException | NoSuchMethodException exc) {
-            // OpenJCEPlus classes not available - will use standard HKDF
-        }
-        
-        hkdfExtractCtor = extractCtor;
-        openJCEPlusAvailable = available;
-    }
-    /*[ENDIF] OPENJCEPLUS_SUPPORT */
 
     // Constructor called by Key Agreement
     KAKeyDerivation(String algorithmName,
@@ -173,18 +133,8 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 // If PSK is not in use Early Secret will still be
                 // HKDF-Extract(0, 0).
                 byte[] zeros = new byte[hashAlg.hashLength];
-                SecretKeySpec zeroKey = new SecretKeySpec(zeros, "TlsPremasterSecret");
-                
-                /*[IF OPENJCEPLUS_SUPPORT]*/
-                // Try OpenJCEPlus HKDF first for post-quantum TLS 1.3 support
-                earlySecret = tryOpenJCEPlusExtract(hashAlg.name, zeros, zeroKey, "TlsEarlySecret");
-                if (earlySecret == null) {
-                /*[ENDIF] OPENJCEPLUS_SUPPORT */
-                    HKDF initialHkdf = new HKDF(hashAlg.name);
-                    earlySecret = initialHkdf.extract(zeros, zeroKey, "TlsEarlySecret");
-                /*[IF OPENJCEPLUS_SUPPORT]*/
-                }
-                /*[ENDIF] OPENJCEPLUS_SUPPORT */
+                HKDF initialHkdf = new HKDF(hashAlg.name);
+                earlySecret = initialHkdf.extract(zeros, new SecretKeySpec(zeros, "TlsPremasterSecret"), "TlsEarlySecret");
                 kd = new SSLSecretDerivation(context, earlySecret);
             }
 
@@ -192,29 +142,32 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             saltSecret = kd.deriveKey("TlsSaltSecret", null);
 
             // derive handshake secret
-            // For hybrid post-quantum key exchange, combine the classical and PQ shared secrets
+            // NOTE: do not reuse the HKDF object for "TlsEarlySecret" for
+            // the handshake secret key derivation (below) as it may not
+            // work with the "sharedSecret" obj.
+            HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Processing Hybrid.SecretKeyImpl");
+                //byte[] k1Bytes = hsk.k1().getEncoded();
+                //byte[] k2Bytes = hsk.k2().getEncoded();
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (k1Bytes != null ? k1Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? HexFormat.of().formatHex(k1Bytes) : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (k2Bytes != null ? k2Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? HexFormat.of().formatHex(k2Bytes) : "null"));
                 byte[] combined = hsk.getEncoded();
                 if (combined == null) {
                     throw new SSLHandshakeException(
                             "Hybrid secret key has no encoded form");
                 }
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + HexFormat.of().formatHex(combined));
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Using non-hybrid shared secret - algorithm: " + sharedSecret.getAlgorithm());
                 ikm = sharedSecret;
             }
 
-            /*[IF OPENJCEPLUS_SUPPORT]*/
-            // Try OpenJCEPlus HKDF first for post-quantum TLS 1.3 support
-            SecretKey result = tryOpenJCEPlusExtract(hashAlg.name, saltSecret.getEncoded(), ikm, label);
-            if (result != null) {
-                return result;
-            }
-            /*[ENDIF] OPENJCEPLUS_SUPPORT */
-            
-            // Fall back to standard HKDF
-            HKDF hkdf = new HKDF(hashAlg.name);
             return hkdf.extract(saltSecret, ikm, label);
         } finally {
             destroySecretKey(earlySecret);
@@ -222,68 +175,6 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             if (ikm != null && ikm != sharedSecret) destroySecretKey(ikm);
         }
     }
-
-    /*[IF OPENJCEPLUS_SUPPORT]*/
-    /**
-     * Attempt to perform HKDF extract operation using OpenJCEPlus provider.
-     * This method tries to use the OpenJCEPlus HKDF implementation (available in both
-     * OpenJCEPlus and OpenJCEPlusFIPS providers) for post-quantum TLS 1.3 key derivation.
-     * If OpenJCEPlus is not available or the operation fails, returns null to allow
-     * fallback to the standard HKDF implementation.
-     *
-     * @param hashAlg the hash algorithm name (e.g., "SHA-256", "SHA-384")
-     * @param salt the salt value as a byte array
-     * @param inputKey the input keying material
-     * @param keyAlg the algorithm name for the resulting SecretKey
-     * @return the extracted secret key, or null if OpenJCEPlus is not available
-     */
-    private SecretKey tryOpenJCEPlusExtract(String hashAlg, byte[] salt,
-            SecretKey inputKey, String keyAlg) {
-        if (!openJCEPlusAvailable) {
-            return null;
-        }
-
-        try {
-            // Convert hash algorithm name to OpenJCEPlus format
-            // e.g., "SHA-256" -> "kda-hkdf-with-sha256"
-            String hkdfAlg = "kda-hkdf-with-" + hashAlg.replace("-", "").toLowerCase();
-            
-            // Try to get KeyGenerator - will succeed if OpenJCEPlus or OpenJCEPlusFIPS
-            // is in the provider list
-            KeyGenerator hkdfGenerator = KeyGenerator.getInstance(hkdfAlg);
-            
-            // Get the provider name for debug logging
-            String providerName = hkdfGenerator.getProvider().getName();
-            
-            // Create HKDFExtractParameterSpec using reflection
-            AlgorithmParameterSpec extractSpec = (AlgorithmParameterSpec) hkdfExtractCtor.newInstance(
-                    inputKey, salt, keyAlg);
-            
-            hkdfGenerator.init(extractSpec);
-            SecretKey result = hkdfGenerator.generateKey();
-            
-            if (SSLLogger.isOn && SSLLogger.isOn("ssl")) {
-                SSLLogger.info("KAKeyDerivation: Using " + providerName + " HKDF extract for " + keyAlg);
-            }
-            
-            return result;
-        } catch (NoSuchAlgorithmException nsae) {
-            // OpenJCEPlus provider not in the provider list, fall back to standard HKDF
-            if (SSLLogger.isOn && SSLLogger.isOn("ssl")) {
-                SSLLogger.fine("KAKeyDerivation: OpenJCEPlus HKDF not available, using standard HKDF");
-            }
-            return null;
-        } catch (ClassCastException | IllegalAccessException | InstantiationException
-                | InvalidAlgorithmParameterException | InvocationTargetException exc) {
-            // Unexpected error with OpenJCEPlus, fall back to standard HKDF
-            if (SSLLogger.isOn && SSLLogger.isOn("ssl")) {
-                SSLLogger.warning("KAKeyDerivation: Error using OpenJCEPlus HKDF, falling back to standard: "
-                        + exc.getMessage());
-            }
-            return null;
-        }
-    }
-    /*[ENDIF] OPENJCEPLUS_SUPPORT */
     /**
      * This method is called by the server to perform KEM encapsulation.
      * It uses the client's public key (sent by the client as a keyshare)
