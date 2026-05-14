@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -119,6 +119,8 @@ public class Hybrid {
         private final KeyPairGenerator right;
         private final AlgorithmParameterSpec leftSpec;
         private final AlgorithmParameterSpec rightSpec;
+        private String leftAlg;
+        private String rightAlg;
 
         public KeyPairGeneratorImpl(String leftAlg, String rightAlg)
                 throws NoSuchAlgorithmException  {
@@ -126,6 +128,8 @@ public class Hybrid {
             right = getKeyPairGenerator(rightAlg);
             leftSpec = getSpec(leftAlg);
             rightSpec = getSpec(rightAlg);
+            this.leftAlg = leftAlg;
+            this.rightAlg = rightAlg;
         }
 
         @Override
@@ -145,6 +149,14 @@ public class Hybrid {
         public KeyPair generateKeyPair() {
             var kp1 = left.generateKeyPair();
             var kp2 = right.generateKeyPair();
+            if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                SSLLogger.finer("Hybrid KeyPairGenerator: " + leftAlg + " comes from " + left.getProvider().getName() + ", "
+                              + "its publicKey comes from " + kp1.getPublic().getClass().getName() + ", "
+                              + "its privateKey comes from " + kp1.getPrivate().getClass().getName() + "\n"
+                              + rightAlg + " comes from " + right.getProvider().getName() + ", "
+                              + "its publicKey comes from " + kp2.getPublic().getClass().getName() + ", "
+                              + "its privateKey comes from " + kp2.getPrivate().getClass().getName() + "\n");
+            }
             return new KeyPair(
                     new PublicKeyImpl("Hybrid", kp1.getPublic(),
                             kp2.getPublic()),
@@ -223,6 +235,13 @@ public class Hybrid {
                                 " algorithm: " + rightname);
                     }
 
+                    if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                        SSLLogger.finer("Hybrid KeyFactory: " + this.leftname + " comes from " + this.left.getProvider().getName() + ", "
+                                    + "left publicKey comes from " + leftKey.getClass().getName() + "\n"
+                                    + this.rightname + " comes from " + this.right.getProvider().getName() + ", "
+                                    + "right publicKey comes from " + rightKey.getClass().getName());
+                    }
+
                     return new PublicKeyImpl("Hybrid", leftKey, rightKey);
                 } catch (Exception e) {
                     throw new InvalidKeySpecException("Failed to decode " +
@@ -240,7 +259,6 @@ public class Hybrid {
                 case "secp256r1" -> 65;
                 case "secp384r1" -> 97;
                 case "ml-kem-768" -> 1184;
-                case "ml-kem-1024" -> 1568;
                 default -> throw new IllegalArgumentException(
                         "Unknown named group: " + name);
             };
@@ -267,11 +285,15 @@ public class Hybrid {
     public static class KEMImpl implements KEMSpi {
         private final KEM left;
         private final KEM right;
+        private String leftname;
+        private String rightname;
 
         public KEMImpl(String left, String right)
                 throws NoSuchAlgorithmException {
             this.left = getKEM(left);
             this.right = getKEM(right);
+            leftname = left;
+            rightname = right;
         }
 
         @Override
@@ -279,9 +301,19 @@ public class Hybrid {
                 AlgorithmParameterSpec spec, SecureRandom secureRandom) throws
                 InvalidAlgorithmParameterException, InvalidKeyException {
             if (publicKey instanceof PublicKeyImpl pk) {
-                return new Handler(left.newEncapsulator(pk.left, secureRandom),
-                        right.newEncapsulator(pk.right, secureRandom),
-                        null, null);
+                KEM.Encapsulator leftEnc = left.newEncapsulator(pk.left, secureRandom);
+                KEM.Encapsulator rightEnc = right.newEncapsulator(pk.right, secureRandom);
+
+                if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                    SSLLogger.finer("Hybrid KEM NewEncapsulator: \n"
+                            + "  LeftEnc [" + leftname + "]: Provider=" + leftEnc.providerName() 
+                            + ", KEMClass=" + left.getClass().getName()
+                            + ", KeyClass=" + pk.left.getClass().getName() + "\n"
+                            + "  RightEnc [" + rightname + "]: Provider=" + rightEnc.providerName() 
+                            + ", KEMClass=" + right.getClass().getName()
+                            + ", KeyClass=" + pk.right.getClass().getName());
+                }
+                return new Handler(leftEnc, rightEnc, null, null);
             }
             throw new InvalidKeyException();
         }
@@ -291,8 +323,19 @@ public class Hybrid {
                 AlgorithmParameterSpec spec)
                 throws InvalidAlgorithmParameterException, InvalidKeyException {
             if (privateKey instanceof PrivateKeyImpl pk) {
-                return new Handler(null, null, left.newDecapsulator(pk.left),
-                        right.newDecapsulator(pk.right));
+                KEM.Decapsulator leftDec = left.newDecapsulator(pk.left);
+                KEM.Decapsulator rightDec = right.newDecapsulator(pk.right);
+
+                if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                    SSLLogger.finer("Hybrid KEM NewDecapsulator: \n"
+                            + "  LeftDec [" + leftname + "]: Provider=" + leftDec.providerName()
+                            + ", KEMClass=" + left.getClass().getName() 
+                            + ", KeyImpl=" + pk.left.getClass().getName() + "\n"
+                            + "  RightDec [" + rightname + "]: Provider=" + rightDec.providerName() 
+                            + ", KEMClass=" + right.getClass().getName()
+                            + ", KeyImpl=" + pk.right.getClass().getName());
+                }
+                return new Handler(null, null, leftDec, rightDec);
             }
             throw new InvalidKeyException();
         }
@@ -328,15 +371,9 @@ public class Hybrid {
                         expectedSecretSize);
             }
 
-            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling left encapsulator with algorithm: " + algorithm);
-            var left  = le.encapsulate(0, le.secretSize(), algorithm);
-            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Left key algorithm: " + left.key().getAlgorithm() + ", encoded length: " + (left.key().getEncoded() != null ? left.key().getEncoded().length : "null"));
-            
-            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Calling right encapsulator with algorithm: " + algorithm);
-            var right = re.encapsulate(0, re.secretSize(), algorithm);
-            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right key algorithm: " + right.key().getAlgorithm() + ", encoded length: " + (right.key().getEncoded() != null ? right.key().getEncoded().length : "null"));
-            //System.out.println("DEBUG [Hybrid.engineEncapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right.encapsulation(), Math.min(32, right.encapsulation().length))));
-            
+            var left  = le.encapsulate();
+            var right = re.encapsulate();
+
             return new KEM.Encapsulated(
                     new SecretKeyImpl(left.key(), right.key()),
                     concat(left.encapsulation(), right.encapsulation()),
@@ -368,7 +405,7 @@ public class Hybrid {
             int expectedEncSize = engineEncapsulationSize();
             //System.out.println("DEBUG [Hybrid.engineDecapsulate] Expected encapsulation size: " + expectedEncSize);
             if (encapsulation.length != expectedEncSize) {
-                throw new IllegalArgumentException(
+                throw new DecapsulateException(
                         "Invalid key encapsulation message length: " +
                         encapsulation.length +
                         ", expected = " + expectedEncSize);
@@ -386,18 +423,11 @@ public class Hybrid {
             var left = Arrays.copyOf(encapsulation, ld.encapsulationSize());
             var right = Arrays.copyOfRange(encapsulation,
                     ld.encapsulationSize(), encapsulation.length);
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Split encapsulation - left size: " + left.length + ", right size: " + right.length);
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right (ML-KEM) ciphertext first 32 bytes: " + HexFormat.of().formatHex(Arrays.copyOf(right, Math.min(32, right.length))));
             
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling left decapsulator with algorithm: " + algorithm);
-            SecretKey leftKey = ld.decapsulate(left, 0, ld.secretSize(), algorithm);
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Left key algorithm: " + leftKey.getAlgorithm() + ", encoded length: " + (leftKey.getEncoded() != null ? leftKey.getEncoded().length : "null"));
-            
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Calling right decapsulator with algorithm: " + algorithm);
-            SecretKey rightKey = rd.decapsulate(right, 0, rd.secretSize(), algorithm);
-            //System.out.println("DEBUG [Hybrid.engineDecapsulate] Right key algorithm: " + rightKey.getAlgorithm() + ", encoded length: " + (rightKey.getEncoded() != null ? rightKey.getEncoded().length : "null"));
-            
-            return new SecretKeyImpl(leftKey, rightKey);
+            return new SecretKeyImpl(
+                    ld.decapsulate(left),
+                    rd.decapsulate(right)
+            );
         }
     }
 
@@ -411,20 +441,12 @@ public class Hybrid {
 
         @Override
         public String getFormat() {
-            return "RAW";
+            return null;
         }
 
         @Override
         public byte[] getEncoded() {
-            byte[] k1Bytes = k1.getEncoded();
-            byte[] k2Bytes = k2.getEncoded();
-            if (k1Bytes == null || k2Bytes == null) {
-                return null;
-            }
-            byte[] combined = new byte[k1Bytes.length + k2Bytes.length];
-            System.arraycopy(k1Bytes, 0, combined, 0, k1Bytes.length);
-            System.arraycopy(k2Bytes, 0, combined, k1Bytes.length, k2Bytes.length);
-            return combined;
+            return null;
         }
     }
 
@@ -459,7 +481,12 @@ public class Hybrid {
             if (key instanceof X509Key xk) {
                 return xk.getKeyAsBytes();
             }
-            
+
+            // Fallback for 3rd-party providers
+            if (!"X.509".equalsIgnoreCase(key.getFormat())) {
+                throw new ProviderException("Invalid public key encoding " +
+                        "format");
+            }
             var xk = new X509Key();
             try {
                 xk.decode(key.getEncoded());

@@ -629,7 +629,7 @@ final class ServerHello {
             if (handshakeSecret == null) {
                 SSLKeyDerivation handshakeKD = ke.createKeyDerivation(shc);
                 handshakeSecret = handshakeKD.deriveKey(
-                        "TlsHandshakeSecret", null);
+                        "TlsHandshakeSecret");
             }
 
             SSLTrafficKeyDerivation kdg =
