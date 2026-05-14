@@ -429,12 +429,7 @@ public class Hybrid {
             if (key instanceof X509Key xk) {
                 return xk.getKeyAsBytes();
             }
-
-            // Fallback for 3rd-party providers
-            if (!"X.509".equalsIgnoreCase(key.getFormat())) {
-                throw new ProviderException("Invalid public key encoding " +
-                        "format");
-            }
+            
             var xk = new X509Key();
             try {
                 xk.decode(key.getEncoded());
