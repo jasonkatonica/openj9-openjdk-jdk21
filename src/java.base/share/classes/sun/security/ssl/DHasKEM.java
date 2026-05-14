@@ -264,8 +264,9 @@ public class DHasKEM implements KEMSpi {
             KeyAgreement ka = KeyAgreement.getInstance(kaAlgorithm);
             ka.init(skE);
             ka.doPhase(pkR, true);
-            SecretKey secret = ka.generateSecret(alg);
-
+            // Use "TlsPremasterSecret" for key agreement
+            SecretKey secret = ka.generateSecret("TlsPremasterSecret");
+            
             // RFC 8446 section 7.4.2: checks for all-zero
             // X25519/X448 shared secret.
             if (kaAlgorithm.equals("X25519") ||
@@ -273,6 +274,11 @@ public class DHasKEM implements KEMSpi {
                 byte[] s = secret.getEncoded();
                 for (byte b : s) {
                     if (b != 0) {
+                        // If the requested algorithm is different, rewrap
+                        if (!alg.equals("TlsPremasterSecret")) {
+                            return new javax.crypto.spec.SecretKeySpec(
+                                    secret.getEncoded(), alg);
+                        }
                         return secret;
                     }
                 }
@@ -281,6 +287,11 @@ public class DHasKEM implements KEMSpi {
                         "All-zero shared secret");
             }
 
+            // If the requested algorithm is different, rewrap
+            if (!alg.equals("TlsPremasterSecret")) {
+                return new javax.crypto.spec.SecretKeySpec(
+                        secret.getEncoded(), alg);
+            }
             return secret;
         }
     }
