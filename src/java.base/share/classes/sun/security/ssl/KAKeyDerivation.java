@@ -27,7 +27,6 @@ package sun.security.ssl;
 import sun.security.util.RawKeySpec;
 
 import javax.crypto.DecapsulateException;
-import javax.crypto.KDF;
 import javax.crypto.KEM;
 import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
