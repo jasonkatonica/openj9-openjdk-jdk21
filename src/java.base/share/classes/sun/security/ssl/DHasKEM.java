@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -101,19 +101,12 @@ public class DHasKEM implements KEMSpi {
             //System.out.println("DEBUG [engineEncapsulate] Serialized public key length: " + pkEm.length);
             try {
                 SecretKey dh = params.DH(algorithm, skE, pkR);
+                //System.out.println("DEBUG [engineEncapsulate] DH result - algorithm: " + dh.getAlgorithm() + ", encoded length: " + (dh.getEncoded() != null ? dh.getEncoded().length : "null"));
+                SecretKey result = sub(dh, from, to);
+                //System.out.println("DEBUG [engineEncapsulate] Final result - algorithm: " + result.getAlgorithm() + ", encoded length: " + (result.getEncoded() != null ? result.getEncoded().length : "null"));
                 return new KEM.Encapsulated(
-                        sub(dh, from, to),
+                        result,
                         pkEm, null);
-
-            } catch (IllegalArgumentException e) {
-                // ECDH validation failure
-                // all-zero shared secret
-                throw e;
-            } catch (InvalidKeyException e) {
-                // Invalid peer public key
-                // Convert InvalidKeyException to an unchecked exception
-                throw new IllegalArgumentException("Invalid peer public key",
-                        e);
             } catch (Exception e) {
                 //System.out.println("DEBUG [engineEncapsulate] Exception occurred: " + e.getMessage());
                 throw new ProviderException("internal error", e);
@@ -142,12 +135,10 @@ public class DHasKEM implements KEMSpi {
                 PublicKey pkE = params.DeserializePublicKey(encapsulation);
                 //System.out.println("DEBUG [engineDecapsulate] Deserialized public key - algorithm: " + pkE.getAlgorithm());
                 SecretKey dh = params.DH(algorithm, skR, pkE);
-                return sub(dh, from, to);
-
-            } catch (IllegalArgumentException e) {
-                // ECDH validation failure
-                // all-zero shared secret
-                throw e;
+                //System.out.println("DEBUG [engineDecapsulate] DH result - algorithm: " + dh.getAlgorithm() + ", encoded length: " + (dh.getEncoded() != null ? dh.getEncoded().length : "null"));
+                SecretKey result = sub(dh, from, to);
+                //System.out.println("DEBUG [engineDecapsulate] Final result - algorithm: " + result.getAlgorithm() + ", encoded length: " + (result.getEncoded() != null ? result.getEncoded().length : "null"));
+                return result;
             } catch (IOException | InvalidKeyException e) {
                 //System.out.println("DEBUG [engineDecapsulate] Exception occurred: " + e.getMessage());
                 throw new DecapsulateException("Cannot decapsulate", e);
@@ -276,23 +267,20 @@ public class DHasKEM implements KEMSpi {
             ka.init(skE);
             //System.out.println("DEBUG [DH] KeyAgreement initialized with private key");
             ka.doPhase(pkR, true);
-            SecretKey secret = ka.generateSecret(alg);
-
-            // RFC 8446 section 7.4.2: checks for all-zero
-            // X25519/X448 shared secret.
-            if (kaAlgorithm.equals("X25519") ||
-                    kaAlgorithm.equals("X448")) {
-                byte[] s = secret.getEncoded();
-                for (byte b : s) {
-                    if (b != 0) {
-                        return secret;
-                    }
-                }
-                // Trigger ILLEGAL_PARAMETER alert
-                throw new IllegalArgumentException(
-                        "All-zero shared secret");
+            //System.out.println("DEBUG [DH] doPhase completed with public key");
+            // Use "TlsPremasterSecret" for key agreement
+            SecretKey secret = ka.generateSecret("TlsPremasterSecret");
+            //System.out.println("DEBUG [DH] Generated secret with TlsPremasterSecret - algorithm: " + secret.getAlgorithm() + ", encoded length: " + (secret.getEncoded() != null ? secret.getEncoded().length : "null"));
+            // If the requested algorithm is different rewrap
+            if (!alg.equals("TlsPremasterSecret")) {
+                //System.out.println("DEBUG [DH] Rewrapping secret from TlsPremasterSecret to " + alg);
+                byte[] encoded = secret.getEncoded();
+                //System.out.println("DEBUG [DH] Secret encoded bytes length: " + (encoded != null ? encoded.length : "null"));
+                SecretKey rewrapped = new javax.crypto.spec.SecretKeySpec(encoded, alg);
+                //System.out.println("DEBUG [DH] Rewrapped secret - algorithm: " + rewrapped.getAlgorithm() + ", encoded length: " + (rewrapped.getEncoded() != null ? rewrapped.getEncoded().length : "null"));
+                return rewrapped;
             }
-
+            //System.out.println("DEBUG [DH] Returning secret without rewrapping (algorithm matches TlsPremasterSecret)");
             return secret;
         }
     }
