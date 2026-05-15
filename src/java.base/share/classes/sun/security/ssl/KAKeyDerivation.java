@@ -135,8 +135,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 // HKDF-Extract(0, 0).
                 byte[] zeros = new byte[hashAlg.hashLength];
                 HKDF initialHkdf = new HKDF(hashAlg.name);
-                SecretKey pskIkm = new SecretKeySpec(zeros, hashAlg.name);
-                earlySecret = initialHkdf.extract(zeros, pskIkm, "TlsEarlySecret");
+                earlySecret = initialHkdf.extract(zeros, new SecretKeySpec(zeros, "TlsPremasterSecret"), "TlsEarlySecret");
                 kd = new SSLSecretDerivation(context, earlySecret);
             }
 
@@ -155,7 +154,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 System.arraycopy(k1, 0, combined, 0, k1.length);
                 System.arraycopy(k2, 0, combined, k1.length, k2.length);
                 
-                ikm = new SecretKeySpec(combined, "Generic");
+                ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
                 ikm = sharedSecret;
