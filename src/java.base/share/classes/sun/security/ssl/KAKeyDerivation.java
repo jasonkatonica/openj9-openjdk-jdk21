@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * ===========================================================================
+ * (c) Copyright IBM Corp. 2026, 2026 All Rights Reserved
+ * ===========================================================================
+ */
+
 package sun.security.ssl;
 
 import sun.security.action.GetPropertyAction;
@@ -143,6 +149,10 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 earlySecret = hkdf.extract(zeros,
                         new SecretKeySpec(zeros, "TlsPremasterSecret"),
                         "TlsEarlySecret");
+                if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                    SSLLogger.finer("No PSK is in use, the HKDF algorithm is: " + hashAlg.name
+                            + ", the classname for earlySecret key is " + earlySecret.getClass().getName());
+                }
                 kd = new SSLSecretDerivation(context, earlySecret);
             }
 
@@ -169,8 +179,12 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             } else {
                 ikm = sharedSecret;
             }
-
-            return hkdf.extract(saltSecret, ikm, label);
+            SecretKey result = hkdf.extract(saltSecret, ikm, label);
+            if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                SSLLogger.finer("derive handshake secret, the HKDF algorithm is: " + hashAlg.name
+                        + ", the classname for result key is " + result.getClass().getName());
+            }
+            return result;
         } finally {
             KeyUtil.destroySecretKeys(earlySecret, saltSecret);
             if (ikm != null && ikm != sharedSecret) {
