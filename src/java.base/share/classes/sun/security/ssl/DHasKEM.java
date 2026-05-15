@@ -266,31 +266,15 @@ public class DHasKEM implements KEMSpi {
             ka.doPhase(pkR, true);
             // Use "TlsPremasterSecret" for key agreement
             SecretKey secret = ka.generateSecret("TlsPremasterSecret");
-            
-            // RFC 8446 section 7.4.2: checks for all-zero
-            // X25519/X448 shared secret.
-            if (kaAlgorithm.equals("X25519") ||
-                    kaAlgorithm.equals("X448")) {
-                byte[] s = secret.getEncoded();
-                for (byte b : s) {
-                    if (b != 0) {
-                        // If the requested algorithm is different, rewrap
-                        if (!alg.equals("TlsPremasterSecret")) {
-                            return new javax.crypto.spec.SecretKeySpec(
-                                    secret.getEncoded(), alg);
-                        }
-                        return secret;
-                    }
-                }
-                // Trigger ILLEGAL_PARAMETER alert
-                throw new IllegalArgumentException(
-                        "All-zero shared secret");
-            }
-
-            // If the requested algorithm is different, rewrap
+            //System.out.println("DEBUG [DH] Generated secret with TlsPremasterSecret - algorithm: " + secret.getAlgorithm() + ", encoded length: " + (secret.getEncoded() != null ? secret.getEncoded().length : "null"));
+            // If the requested algorithm is different rewrap
             if (!alg.equals("TlsPremasterSecret")) {
-                return new javax.crypto.spec.SecretKeySpec(
-                        secret.getEncoded(), alg);
+                //System.out.println("DEBUG [DH] Rewrapping secret from TlsPremasterSecret to " + alg);
+                byte[] encoded = secret.getEncoded();
+                //System.out.println("DEBUG [DH] Secret encoded bytes length: " + (encoded != null ? encoded.length : "null"));
+                SecretKey rewrapped = new javax.crypto.spec.SecretKeySpec(encoded, alg);
+                //System.out.println("DEBUG [DH] Rewrapped secret - algorithm: " + rewrapped.getAlgorithm() + ", encoded length: " + (rewrapped.getEncoded() != null ? rewrapped.getEncoded().length : "null"));
+                return rewrapped;
             }
             return secret;
         }
