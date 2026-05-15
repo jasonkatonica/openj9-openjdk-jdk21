@@ -137,6 +137,11 @@ public class Hybrid {
             rightSpec = getSpec(rightAlg);
             this.leftAlg = leftAlg;
             this.rightAlg = rightAlg;
+            if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                SSLLogger.finer("Hybrid KeyPairGenerator:\n"
+                        + "  " + leftAlg + " is from " + left.getProvider().getName() + "\n"
+                        + "  " + rightAlg + " is from " + right.getProvider().getName() + "\n");
+            }
         }
 
         @Override
@@ -156,6 +161,13 @@ public class Hybrid {
         public KeyPair generateKeyPair() {
             var kp1 = left.generateKeyPair();
             var kp2 = right.generateKeyPair();
+            if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                SSLLogger.finer("Hybrid KeyPairGenerator:\n"
+                        + "  left publicKey is from " + kp1.getPublic().getClass().getName() + ", "
+                        + "privateKey is from " + kp1.getPrivate().getClass().getName() + "\n"
+                        + "  right publicKey is from " + kp2.getPublic().getClass().getName() + ", "
+                        + "privateKey is from " + kp2.getPrivate().getClass().getName() + "\n");
+            }
             return new KeyPair(
                     new PublicKeyImpl("Hybrid", kp1.getPublic(),
                             kp2.getPublic()),
@@ -288,15 +300,15 @@ public class Hybrid {
     public static class KEMImpl implements KEMSpi {
         private final KEM left;
         private final KEM right;
-        private String leftname;
-        private String rightname;
+        private final String leftname;
+        private final String rightname;
 
         public KEMImpl(String left, String right)
                 throws NoSuchAlgorithmException {
             this.left = getKEM(left);
             this.right = getKEM(right);
-            leftname = left;
-            rightname = right;
+            this.leftname = left;
+            this.rightname = right;
         }
 
         @Override
@@ -304,9 +316,20 @@ public class Hybrid {
                 AlgorithmParameterSpec spec, SecureRandom secureRandom) throws
                 InvalidAlgorithmParameterException, InvalidKeyException {
             if (publicKey instanceof PublicKeyImpl pk) {
-                return new Handler(left.newEncapsulator(pk.left, secureRandom),
-                        right.newEncapsulator(pk.right, secureRandom),
-                        null, null);
+                KEM.Encapsulator leftEnc = left.newEncapsulator(pk.left, secureRandom);
+                KEM.Encapsulator rightEnc = right.newEncapsulator(pk.right, secureRandom);
+
+                if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                    SSLLogger.finer("Hybrid KEM NewEncapsulator:\n"
+                            + "  LeftEnc [" + leftname + "]: Provider=" + leftEnc.providerName()
+                            + ", KEMClass=" + left.getClass().getName()
+                            + ", KeyClass=" + pk.left.getClass().getName() + "\n"
+                            + "  RightEnc [" + rightname + "]: Provider=" + rightEnc.providerName()
+                            + ", KEMClass=" + right.getClass().getName()
+                            + ", KeyClass=" + pk.right.getClass().getName());
+                }
+
+                return new Handler(leftEnc, rightEnc, null, null);
             }
             throw new InvalidKeyException();
         }
@@ -316,8 +339,20 @@ public class Hybrid {
                 AlgorithmParameterSpec spec)
                 throws InvalidAlgorithmParameterException, InvalidKeyException {
             if (privateKey instanceof PrivateKeyImpl pk) {
-                return new Handler(null, null, left.newDecapsulator(pk.left),
-                        right.newDecapsulator(pk.right));
+                KEM.Decapsulator leftDec = left.newDecapsulator(pk.left);
+                KEM.Decapsulator rightDec = right.newDecapsulator(pk.right);
+
+                if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
+                    SSLLogger.finer("Hybrid KEM NewDecapsulator:\n"
+                            + "  LeftDec [" + leftname + "]: Provider=" + leftDec.providerName()
+                            + ", KEMClass=" + left.getClass().getName()
+                            + ", KeyImpl=" + pk.left.getClass().getName() + "\n"
+                            + "  RightDec [" + rightname + "]: Provider=" + rightDec.providerName()
+                            + ", KEMClass=" + right.getClass().getName()
+                            + ", KeyImpl=" + pk.right.getClass().getName());
+                }
+
+                return new Handler(null, null, leftDec, rightDec);
             }
             throw new InvalidKeyException();
         }
