@@ -599,7 +599,7 @@ final class KeyShareExtension {
                                     name, ng, shc, null, null,
                                     kcred.getKeyShare());
                             var encaped = handshakeKD.encapsulate(
-                                    "TlsHandshakeSecret", xp.getRandom());
+                                    "TlsPremasterSecret", xp.getRandom());
                             xp.setKey(encaped.key());
                             keyShare = new KeyShareEntry(ng.id,
                                     encaped.encapsulation());
