@@ -239,6 +239,7 @@ public class Hybrid {
                 case "secp256r1" -> 65;
                 case "secp384r1" -> 97;
                 case "ml-kem-768" -> 1184;
+                case "ml-kem-1024" -> 1568;
                 default -> throw new IllegalArgumentException(
                         "Unknown named group: " + name);
             };
