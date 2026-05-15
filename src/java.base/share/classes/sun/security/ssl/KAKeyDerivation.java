@@ -148,12 +148,20 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // work with the "sharedSecret" obj.
             HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
-                byte[] k1 = hsk.k1().getEncoded();
-                byte[] k2 = hsk.k2().getEncoded();
-                byte[] combined = new byte[k1.length + k2.length];
-                System.arraycopy(k1, 0, combined, 0, k1.length);
-                System.arraycopy(k2, 0, combined, k1.length, k2.length);
-                
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Processing Hybrid.SecretKeyImpl");
+                //byte[] k1Bytes = hsk.k1().getEncoded();
+                //byte[] k2Bytes = hsk.k2().getEncoded();
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 algorithm: " + hsk.k1().getAlgorithm() + ", k1 encoded length: " + (k1Bytes != null ? k1Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k1 hex: " + (k1Bytes != null ? HexFormat.of().formatHex(k1Bytes) : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 algorithm: " + hsk.k2().getAlgorithm() + ", k2 encoded length: " + (k2Bytes != null ? k2Bytes.length : "null"));
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] k2 hex: " + (k2Bytes != null ? HexFormat.of().formatHex(k2Bytes) : "null"));
+                byte[] combined = hsk.getEncoded();
+                if (combined == null) {
+                    throw new SSLHandshakeException(
+                            "Hybrid secret key has no encoded form");
+                }
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined encoded length: " + combined.length);
+                //System.out.println("DEBUG [KAKeyDerivation.deriveHandshakeSecret] Combined hex: " + HexFormat.of().formatHex(combined));
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
                 java.util.Arrays.fill(combined, (byte)0);
             } else {
