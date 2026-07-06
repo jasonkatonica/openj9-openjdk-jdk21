@@ -33,6 +33,8 @@ import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLHandshakeException;
+import javax.security.auth.DestroyFailedException;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
@@ -42,7 +44,7 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
-import sun.security.util.KeyUtil;
+import jdk.internal.access.SharedSecrets;
 
 /**
  * A common class for creating various KeyDerivation types.
@@ -164,9 +166,9 @@ public class KAKeyDerivation implements SSLKeyDerivation {
 
             return hkdf.extract(saltSecret, ikm, label);
         } finally {
-            KeyUtil.destroySecretKeys(earlySecret, saltSecret);
+            destroySecretKey(earlySecret, saltSecret);
             if (ikm != null && ikm != sharedSecret) {
-                KeyUtil.destroySecretKeys(ikm);
+                destroySecretKey(ikm);
             }
         }
     }
@@ -219,7 +221,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // unexpected provider/runtime failure
             throw context.conContext.fatal(Alert.INTERNAL_ERROR, e);
         } finally {
-            KeyUtil.destroySecretKeys(sharedSecret);
+            destroySecretKey(sharedSecret);
         }
     }
 
@@ -273,7 +275,25 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // deriveHandshakeSecret() failure
             throw new SSLHandshakeException("Could not generate secret", gse);
         } finally {
-            KeyUtil.destroySecretKeys(sharedSecret);
+            destroySecretKey(sharedSecret);
+        }
+    }
+
+    // destroy secret keys in a best-effort way
+    private static void destroySecretKey(SecretKey... keys) {
+        for (SecretKey k : keys) {
+            if (k != null) {
+                if (k instanceof SecretKeySpec sk) {
+                    SharedSecrets.getJavaxCryptoSpecAccess()
+                            .clearSecretKeySpec(sk);
+                } else {
+                    try {
+                        k.destroy();
+                    } catch (DestroyFailedException e) {
+                        // swallow
+                    }
+                }
+            }
         }
     }
 }
