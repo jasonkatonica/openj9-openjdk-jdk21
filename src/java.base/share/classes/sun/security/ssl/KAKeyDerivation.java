@@ -28,7 +28,6 @@ package sun.security.ssl;
 import sun.security.util.RawKeySpec;
 
 import javax.crypto.DecapsulateException;
-import javax.crypto.KDF;
 import javax.crypto.KEM;
 import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
@@ -42,6 +41,7 @@ import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import sun.security.util.KeyUtil;
 
 /**
@@ -127,6 +127,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             throws GeneralSecurityException, IOException {
         SecretKey earlySecret = null;
         SecretKey saltSecret = null;
+        SecretKey ikm = null;
 
         CipherSuite.HashAlg hashAlg = context.negotiatedCipherSuite.hashAlg;
         SSLKeyDerivation kd = context.handshakeKeyDerivation;
@@ -135,31 +136,38 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 // If PSK is not in use Early Secret will still be
                 // HKDF-Extract(0, 0).
                 byte[] zeros = new byte[hashAlg.hashLength];
-                SecretKeySpec ikm
-                        = new SecretKeySpec(zeros, "TlsPreSharedSecret");
-                SecretKey earlySecret
-                        = hkdf.extract(zeros, ikm, "TlsEarlySecret");
+                HKDF hkdf = new HKDF(hashAlg.name);
+                earlySecret = hkdf.extract(zeros,
+                        new SecretKeySpec(zeros, "TlsPremasterSecret"),
+                        "TlsEarlySecret");
                 kd = new SSLSecretDerivation(context, earlySecret);
             }
 
             // derive salt secret
-            SecretKey saltSecret = kd.deriveKey("TlsSaltSecret", null);
+            saltSecret = kd.deriveKey("TlsSaltSecret", null);
 
             // derive handshake secret
             // NOTE: do not reuse the HKDF object for "TlsEarlySecret" for
             // the handshake secret key derivation (below) as it may not
             // work with the "sharedSecret" obj.
-            KDF hkdf = KDF.getInstance(hashAlg.hkdfAlgorithm);
-            var spec = HKDFParameterSpec.ofExtract().addSalt(saltSecret);
+            HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
-                spec = spec.addIKM(hsk.k1()).addIKM(hsk.k2());
+                byte[] combined = hsk.getEncoded();
+                if (combined == null) {
+                    throw new SSLHandshakeException(
+                            "Hybrid secret key has no encoded form");
+                }
+                ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
             } else {
-                spec = spec.addIKM(sharedSecret);
+                ikm = sharedSecret;
             }
 
-            return hkdf.deriveKey(label, spec.extractOnly());
+            return hkdf.extract(saltSecret, ikm, label);
         } finally {
             KeyUtil.destroySecretKeys(earlySecret, saltSecret);
+            if (ikm != null && ikm != sharedSecret) {
+                KeyUtil.destroySecretKeys(ikm);
+            }
         }
     }
     /**
@@ -218,7 +226,8 @@ public class KAKeyDerivation implements SSLKeyDerivation {
     /**
      * Handle the TLSv1.3 objects, which use the HKDF algorithms.
      */
-    private SecretKey t13DeriveKey(String type)
+    private SecretKey t13DeriveKey(String type,
+            AlgorithmParameterSpec params)
             throws IOException {
         SecretKey sharedSecret = null;
 
