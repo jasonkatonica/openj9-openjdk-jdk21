@@ -51,9 +51,6 @@ import jdk.internal.access.SharedSecrets;
  */
 public class KAKeyDerivation implements SSLKeyDerivation {
 
-    // Algorithm used to derive TLS 1.3 shared secrets
-    private static final String t13KeyDerivationAlgorithm =
-            System.getProperty("jdk.tls.t13KeyDerivationAlgorithm", "Generic");
     private final String algorithmName;
     private final HandshakeContext context;
     private final PrivateKey localPrivateKey;
@@ -249,7 +246,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                     var decapsulator = kem.newDecapsulator(localPrivateKey);
                     sharedSecret = decapsulator.decapsulate(
                             keyshare, 0, decapsulator.secretSize(),
-                            t13KeyDerivationAlgorithm);
+                            "TlsPremasterSecret");
                 } catch (IllegalArgumentException | InvalidKeyException |
                         DecapsulateException e) {
                     // Peer validation failure
@@ -267,7 +264,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                 KeyAgreement ka = KeyAgreement.getInstance(algorithmName);
                 ka.init(localPrivateKey);
                 ka.doPhase(peerPublicKey, true);
-                sharedSecret = ka.generateSecret(t13KeyDerivationAlgorithm);
+                sharedSecret = ka.generateSecret("TlsPremasterSecret");
             }
 
             return deriveHandshakeSecret(type, sharedSecret);
