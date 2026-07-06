@@ -338,8 +338,8 @@ public class Hybrid {
                         expectedSecretSize);
             }
 
-            var left  = le.encapsulate();
-            var right = re.encapsulate();
+            var left  = le.encapsulate(0, le.secretSize(), algorithm);
+            var right = re.encapsulate(0, re.secretSize(), algorithm);
             return new KEM.Encapsulated(
                     new SecretKeyImpl(left.key(), right.key()),
                     concat(left.encapsulation(), right.encapsulation()),
