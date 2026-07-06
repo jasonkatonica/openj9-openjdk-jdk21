@@ -207,7 +207,8 @@ public class KAKeyDerivation implements SSLKeyDerivation {
                     KEM.getInstance(algorithmName, provider) :
                     KEM.getInstance(algorithmName);
             KEM.Encapsulator e = kem.newEncapsulator(pk, random);
-            KEM.Encapsulated enc = e.encapsulate();
+            KEM.Encapsulated enc = e.encapsulate(0, e.secretSize(),
+                    "TlsPremasterSecret");
             sharedSecret = enc.key();
 
             SecretKey derived = deriveHandshakeSecret(algorithm, sharedSecret);
