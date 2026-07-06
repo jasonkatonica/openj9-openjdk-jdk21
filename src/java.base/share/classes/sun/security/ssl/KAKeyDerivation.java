@@ -151,12 +151,17 @@ public class KAKeyDerivation implements SSLKeyDerivation {
             // work with the "sharedSecret" obj.
             HKDF hkdf = new HKDF(hashAlg.name);
             if (sharedSecret instanceof Hybrid.SecretKeyImpl hsk) {
-                byte[] combined = hsk.getEncoded();
-                if (combined == null) {
+                byte[] k1Bytes = hsk.k1().getEncoded();
+                byte[] k2Bytes = hsk.k2().getEncoded();
+                if (k1Bytes == null || k2Bytes == null) {
                     throw new SSLHandshakeException(
-                            "Hybrid secret key has no encoded form");
+                            "Hybrid secret key component has no encoded form");
                 }
+                byte[] combined = new byte[k1Bytes.length + k2Bytes.length];
+                System.arraycopy(k1Bytes, 0, combined, 0, k1Bytes.length);
+                System.arraycopy(k2Bytes, 0, combined, k1Bytes.length, k2Bytes.length);
                 ikm = new SecretKeySpec(combined, "TlsPremasterSecret");
+                java.util.Arrays.fill(combined, (byte) 0);
             } else {
                 ikm = sharedSecret;
             }
