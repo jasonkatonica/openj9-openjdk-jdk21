@@ -42,7 +42,10 @@ import javax.crypto.interfaces.DHKey;
 import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.DHPublicKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+import javax.security.auth.DestroyFailedException;
 
+import jdk.internal.access.SharedSecrets;
 import sun.security.jca.JCAUtil;
 
 /**
@@ -409,6 +412,33 @@ public final class KeyUtil {
         BigInteger r = p.remainder(y);
         if (r.equals(BigInteger.ZERO)) {
             throw new InvalidKeyException("Invalid Diffie-Hellman parameters");
+        }
+    }
+
+    /**
+     * Destroys the given secret keys in a best-effort way.
+     * For {@link SecretKeySpec} instances the internal key material is cleared
+     * directly via {@link SharedSecrets}; for all other {@link SecretKey}
+     * types {@link javax.security.auth.Destroyable#destroy()} is called and
+     * any {@link DestroyFailedException} is silently swallowed.
+     * {@code null} entries in the varargs array are silently ignored.
+     *
+     * @param keys zero or more {@link SecretKey} objects to destroy
+     */
+    public static void destroySecretKeys(SecretKey... keys) {
+        for (SecretKey k : keys) {
+            if (k != null) {
+                if (k instanceof SecretKeySpec sk) {
+                    SharedSecrets.getJavaxCryptoSpecAccess()
+                            .clearSecretKeySpec(sk);
+                } else {
+                    try {
+                        k.destroy();
+                    } catch (DestroyFailedException e) {
+                        // swallow
+                    }
+                }
+            }
         }
     }
 
