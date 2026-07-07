@@ -387,8 +387,8 @@ public class Hybrid {
             var right = Arrays.copyOfRange(encapsulation,
                     ld.encapsulationSize(), encapsulation.length);
             return new SecretKeyImpl(
-                    ld.decapsulate(left),
-                    rd.decapsulate(right)
+                    ld.decapsulate(left, 0, ld.secretSize(), algorithm),
+                    rd.decapsulate(right, 0, rd.secretSize(), algorithm)
             );
         }
     }
