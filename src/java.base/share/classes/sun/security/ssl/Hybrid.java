@@ -440,11 +440,6 @@ public class Hybrid {
         }
 
         static byte[] onlyKey(PublicKey key) {
-            if (key instanceof X509Key xk) {
-                return xk.getKeyAsBytes();
-            }
-
-            // Fallback for 3rd-party providers
             if (!"X.509".equalsIgnoreCase(key.getFormat())) {
                 throw new ProviderException("Invalid public key encoding " +
                         "format");
