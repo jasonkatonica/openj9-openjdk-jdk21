@@ -441,7 +441,7 @@ public class Hybrid {
 
         static byte[] onlyKey(PublicKey key) {
             if (key instanceof X509Key xk) {
-                return xk.getKeyAsBytes();
+                return xk.getKey().toByteArray();
             }
 
             // Fallback for 3rd-party providers
