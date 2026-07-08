@@ -25,6 +25,7 @@
 
 package sun.security.ssl;
 
+import sun.security.action.GetPropertyAction;
 import sun.security.util.RawKeySpec;
 
 import javax.crypto.DecapsulateException;
@@ -51,7 +52,8 @@ public class KAKeyDerivation implements SSLKeyDerivation {
 
     // Algorithm used to derive TLS 1.3 shared secrets
     private static final String t13KeyDerivationAlgorithm =
-            System.getProperty("jdk.tls.t13KeyDerivationAlgorithm", "TlsPremasterSecret");
+            GetPropertyAction.privilegedGetProperty(
+                    "jdk.tls.t13KeyDerivationAlgorithm", "TlsPremasterSecret");
     private final String algorithmName;
     private final HandshakeContext context;
     private final PrivateKey localPrivateKey;
