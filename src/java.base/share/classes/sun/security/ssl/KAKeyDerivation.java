@@ -90,7 +90,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
         if (!context.negotiatedProtocol.useTLS13PlusSpec()) {
             return t12DeriveKey(algorithm, params);
         } else {
-            return t13DeriveKey(algorithm, params);
+            return t13DeriveKey(algorithm);
         }
     }
 
@@ -232,8 +232,7 @@ public class KAKeyDerivation implements SSLKeyDerivation {
     /**
      * Handle the TLSv1.3 objects, which use the HKDF algorithms.
      */
-    private SecretKey t13DeriveKey(String type,
-            AlgorithmParameterSpec params)
+    private SecretKey t13DeriveKey(String type)
             throws IOException {
         SecretKey sharedSecret = null;
 
