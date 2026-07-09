@@ -25,13 +25,15 @@
 
 package sun.security.util;
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.AccessController;
 import java.security.AlgorithmParameters;
 import java.security.InvalidKeyException;
 import java.security.Key;
-import java.security.PrivilegedAction;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.PrivilegedAction;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.interfaces.*;
@@ -47,6 +49,7 @@ import javax.security.auth.DestroyFailedException;
 
 import jdk.internal.access.SharedSecrets;
 import sun.security.jca.JCAUtil;
+import sun.security.x509.AlgorithmId;
 
 /**
  * A utility class to get key length, validate keys, etc.
@@ -415,16 +418,7 @@ public final class KeyUtil {
         }
     }
 
-    /**
-     * Destroys the given secret keys in a best-effort way.
-     * For {@link SecretKeySpec} instances the internal key material is cleared
-     * directly via {@link SharedSecrets}; for all other {@link SecretKey}
-     * types {@link javax.security.auth.Destroyable#destroy()} is called and
-     * any {@link DestroyFailedException} is silently swallowed.
-     * {@code null} entries in the varargs array are silently ignored.
-     *
-     * @param keys zero or more {@link SecretKey} objects to destroy
-     */
+    // destroy secret keys in a best-effort way
     public static void destroySecretKeys(SecretKey... keys) {
         for (SecretKey k : keys) {
             if (k != null) {
@@ -480,5 +474,69 @@ public final class KeyUtil {
         }
         return null;
     }
+
+    public static PublicKey newRawPublicKey(String algorithm, byte[] key) {
+        return newRawPublicKey(algorithm, null, key);
+    }
+
+    public static PublicKey newRawPublicKey(String algorithm,
+            AlgorithmParameterSpec params, byte[] key) {
+        return new RawPublicKey(algorithm, params, key);
+    }
+
+    private record RawPublicKey(String algorithm, AlgorithmParameterSpec params,
+            byte[] data) implements PublicKey {
+
+        RawPublicKey {
+            data = data.clone();
+        }
+
+        @Override
+        public String getAlgorithm() {
+            return algorithm;
+        }
+
+        @Override
+        public String getFormat() {
+            return "RAW";
+        }
+
+        @Override
+        public byte[] getEncoded() {
+            return data.clone();
+        }
+
+        public AlgorithmParameterSpec getParams() {
+            return params;
+        }
+    }
+
+    // Convert RAW encoding to X.509 encoding of a public key.
+    public static byte[] rawToX509(String pname, byte[] bytes)
+            throws NoSuchAlgorithmException {
+        AlgorithmId algid = AlgorithmId.get(pname);
+        BitArray key = new BitArray(bytes.length * 8, bytes);
+        DerOutputStream tmp = new DerOutputStream();
+        algid.encode(tmp);
+        tmp.putUnalignedBitString(key);
+        DerOutputStream out = new DerOutputStream();
+        out.write(DerValue.tag_Sequence, tmp);
+        return out.toByteArray();
+    }
+
+    // Convert X.509 encoding to RAW encoding of a public key.
+    public static byte[] x509ToRaw(byte[] bytes) throws IOException {
+        DerValue in = new DerValue(bytes);
+        if (in.tag != DerValue.tag_Sequence) {
+            throw new IOException("corrupt subject key");
+        }
+        AlgorithmId.parse(in.data.getDerValue());
+        BitArray keyMaterial = in.data.getUnalignedBitString();
+        if (keyMaterial.length() % 8 != 0) {
+            throw new IOException("Unaligned bits in public key");
+        }
+        return keyMaterial.toByteArray();
+    }
+
 }
 
