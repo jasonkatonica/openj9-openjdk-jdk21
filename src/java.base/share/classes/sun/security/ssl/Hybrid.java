@@ -126,8 +126,6 @@ public class Hybrid {
         private final KeyPairGenerator right;
         private final AlgorithmParameterSpec leftSpec;
         private final AlgorithmParameterSpec rightSpec;
-        private String leftAlg;
-        private String rightAlg;
 
         public KeyPairGeneratorImpl(String leftAlg, String rightAlg)
                 throws NoSuchAlgorithmException  {
@@ -135,8 +133,6 @@ public class Hybrid {
             right = getKeyPairGenerator(rightAlg);
             leftSpec = getSpec(leftAlg);
             rightSpec = getSpec(rightAlg);
-            this.leftAlg = leftAlg;
-            this.rightAlg = rightAlg;
             if (SSLLogger.isOn && SSLLogger.isOn("ssl,handshake")) {
                 SSLLogger.finer("Hybrid KeyPairGenerator:\n"
                         + "  " + leftAlg + " is from " + left.getProvider().getName() + "\n"
