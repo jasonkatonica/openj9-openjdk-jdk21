@@ -142,12 +142,10 @@ final class KEMKeyExchange {
             if (publicKey instanceof Hybrid.PublicKeyImpl hk) {
                 return hk.getEncoded();
             }
-
             if (!"X.509".equalsIgnoreCase(publicKey.getFormat())) {
                 throw new ProviderException("Invalid public key encoding " +
                         "format");
             }
-
             var xk = new X509Key();
             try {
                 xk.decode(publicKey.getEncoded());
